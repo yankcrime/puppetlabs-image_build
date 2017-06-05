@@ -5,7 +5,7 @@
 
 <% if environment %>ENV <% environment.each do |name, value| %><%= name.upcase %>="<%= value %>" <% end %><% end %>
 
-<% if rocker %>MOUNT /opt/puppetlabs /etc/puppetlabs /root/.gem<% end %>
+<% if rocker %>MOUNT /opt/puppetlabs /etc/puppetlabs /root/.gem ~/.config/keys:/keys<% end %>
 
 <% if labels && !labels.empty? %>LABEL <%= labels.map { |g| g.split('=') }.map { |k,v| "#{k}=\"#{v}\"" }.join(' ') %><% end %>
 
@@ -59,7 +59,7 @@ RUN rm /usr/lib/ruby/gems/2.3.0/gems/facter-"$FACTER_VERSION"/lib/facter/blockde
 <% if os == 'ubuntu' or os == 'debian' %>
 RUN <% if apt_proxy %>echo "Acquire::HTTP::Proxy \"$APT_PROXY\";" >> /etc/apt/apt.conf.d/01proxy && echo 'Acquire::HTTPS::Proxy "false";' >> /etc/apt/apt.conf.d/01proxy && <% end %>apt-get update && \
     apt-get install --no-install-recommends -y git-core && \
-    <%= gem_path %> install r10k:"$R10K_VERSION" --no-ri --no-rdoc && \
+    <%= gem_path %> install r10k:"$R10K_VERSION" hiera-eyaml deep_merge --no-ri --no-rdoc && \
     apt-get autoremove -y && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* <% if apt_proxy %>&& rm -f /etc/apt/apt.conf.d/01proxy<% end %>
