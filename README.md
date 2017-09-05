@@ -375,17 +375,27 @@ OPTIONS:
   --master STRING                - A Puppet Master to use for building images
   --module-path PATH             - A path to a directory containing a set of
                                    modules to be copied into the image
+  --network STRING               - The Docker network to pass along to the
+                                   docker build command
   --os STRING                    - The operating system used by the image if not
                                    autodetected
   --os-version STRING            - The version of the operating system used by
                                    the image if not autodetected
   --puppet-agent-version STRING  - Version of the Puppet Agent package to
                                    install
+  --puppet-debug                 - Pass the debug flag to the Puppet process
+                                   used to build the container image
   --puppetfile STRING            - Enable use of Puppetfile to install
                                    dependencies during build
   --r10k-version STRING          - Version of R10k to use for installing modules
                                    from Puppetfile
   --rocker                       - Use Rocker as the build tool
+  --[no-]show-diff               - Enable or disable showing the diff when
+                                   running Puppet to build the image
+  --skip-puppet-install          - If the base image already contains Puppet we
+                                   can skip installing it
+  --volume STRING                - A list of volumes to be added to the
+                                   resulting image
 
 ACTIONS:
   build         Build a Docker image from Puppet code

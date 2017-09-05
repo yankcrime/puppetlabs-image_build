@@ -22,12 +22,12 @@ module PuppetX
 
       option '--puppet-agent-version STRING' do
         summary 'Version of the Puppet Agent package to install'
-        default_to { '1.8.2' }
+        default_to { '5.0.1' }
       end
 
       option '--r10k-version STRING' do
         summary 'Version of R10k to use for installing modules from Puppetfile'
-        default_to { '2.2.2' }
+        default_to { '2.5.5' }
       end
 
       option '--module-path PATH' do
@@ -64,6 +64,11 @@ module PuppetX
 
       option '--[no-]inventory' do
         summary 'Enable or disable the generation of an inventory file at /inventory.json'
+        default_to { true }
+      end
+
+      option '--[no-]show-diff' do
+        summary 'Enable or disable showing the diff when running Puppet to build the image'
         default_to { true }
       end
 
@@ -107,6 +112,16 @@ module PuppetX
 
       option '--label-schema' do
         summary 'Add label-schema compatible labels'
+        default_to { false }
+      end
+
+      option '--skip-puppet-install' do
+        summary 'If the base image already contains Puppet we can skip installing it'
+        default_to { false }
+      end
+
+      option '--puppet-debug' do
+        summary 'Pass the debug flag to the Puppet process used to build the container image'
         default_to { false }
       end
     end

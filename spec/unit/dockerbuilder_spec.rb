@@ -17,7 +17,7 @@ describe PuppetX::Puppetlabs::DockerBuilder do
     let(:args) do
       {
         from: from,
-        image_name: image_name,
+        image_name: image_name
       }
     end
 
@@ -35,7 +35,7 @@ describe PuppetX::Puppetlabs::DockerBuilder do
       {
         from: from,
         image_name: image_name,
-        rocker: true,
+        rocker: true
       }
     end
     it 'should use rocker build rather than the default' do
@@ -50,11 +50,25 @@ describe PuppetX::Puppetlabs::DockerBuilder do
         from: from,
         image_name: image_name,
         autosign_token: token,
-        rocker: true,
+        rocker: true
       }
     end
     it 'should pass the token as a build argument' do
       expect(builder.send(:build_command)).to include("--build-arg AUTOSIGN_TOKEN=#{token}")
+    end
+  end
+
+  context 'with an explicit network specified for docker build' do
+    let(:network) { 'samplenetwork' }
+    let(:args) do
+      {
+        from: from,
+        image_name: image_name,
+        network: network
+      }
+    end
+    it 'should pass the network as an argument' do
+      expect(builder.send(:build_command)).to include("--network #{network}")
     end
   end
 
@@ -91,7 +105,7 @@ describe PuppetX::Puppetlabs::DockerBuilder do
     'force-rm',
     'no-cache',
     'pull',
-    'quiet',
+    'quiet'
   ].each do |argument|
     context "when passing --#{argument}" do
       let(:args) do

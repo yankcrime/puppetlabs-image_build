@@ -2,6 +2,7 @@ require 'pty'
 require 'yaml'
 require 'resolv'
 require 'date'
+require 'English'
 
 require 'puppet_x/puppetlabs/deep_symbolize_keys'
 require 'puppet_x/puppetlabs/dockerfile'
@@ -18,7 +19,7 @@ module PuppetX
     class ImageBuilder
       attr_accessor :context
 
-      def initialize(manifest, args) # rubocop:disable Metrics/AbcSize
+      def initialize(manifest, args)
         @context = args
         load_from_config_file
         add_manifest_to_context(manifest)
@@ -35,6 +36,7 @@ module PuppetX
         determine_if_using_factfile
         determine_if_using_hiera
         determine_environment_vars
+        determine_repository_details
         determine_hostname
         determine_master_host_and_port
         determine_if_master_is_ip
@@ -47,17 +49,24 @@ module PuppetX
 
       private
 
+      def pty(cmd, &block)
+        PTY.spawn(cmd, &block)
+        $CHILD_STATUS
+      end
+
       def run(command)
-        begin
-          PTY.spawn(command) do |stdout, stdin, pid|
-            begin
-              stdout.each { |line| print line }
-            rescue Errno::EIO # rubocop:disable Lint/HandleExceptions
-            end
+        status = pty(command) do |stdout, _stdin, pid|
+          begin
+            stdout.each { |line| print line }
+          rescue Errno::EIO # rubocop:disable Lint/HandleExceptions
           end
-        rescue PTY::ChildExited => e
-          raise BuildError, e.message
+          Process.wait(pid)
         end
+        unless status.nil? || status.success?
+          raise BuildError, 'The docker build process exited with a non-zero status code'
+        end
+      rescue PTY::ChildExited => e
+        raise BuildError, e.message
       end
 
       def validate_context
@@ -160,19 +169,15 @@ module PuppetX
       end
 
       def value_to_array(value)
-        @context[value] = @context[value].to_s.split(',') if (@context[value].is_a?(String) || @context[value].is_a?(Integer) || @context[value].nil?)
+        @context[value] = @context[value].to_s.split(',') if @context[value].is_a?(String) || @context[value].is_a?(Integer) || @context[value].nil?
       end
 
       def determine_if_using_puppetfile
-        if exists_and_is_file(:puppetfile)
-          @context[:use_puppetfile] = true
-        end
+        @context[:use_puppetfile] = true if exists_and_is_file(:puppetfile)
       end
 
       def determine_if_using_factfile
-        if exists_and_is_file(:factfile)
-          @context[:use_factfile] = true
-        end
+        @context[:use_factfile] = true if exists_and_is_file(:factfile)
       end
 
       def determine_if_using_hiera
@@ -198,28 +203,27 @@ module PuppetX
                                end
       end
 
-      #rubocop:disable Metrics/PerceivedComplexity
-      def determine_environment_vars # rubocop:disable Metrics/AbcSize
+      def determine_environment_vars
         codename = nil
         puppet_version = nil
         facter_version = nil
         case @context[:os]
         when 'ubuntu'
           codename = case @context[:os_version]
-                     when 'latest', 'xenial', nil, /^16\.04/
+                     when 'latest', 'xenial', nil, %r{^16\.04}
                        'xenial'
-                     when 'trusty', /^14\.04/
+                     when 'trusty', %r{^14\.04}
                        'trusty'
-                     when 'precise', /^12\.04/
+                     when 'precise', %r{^12\.04}
                        'precise'
                      end
         when 'debian'
           codename = case @context[:os_version]
-                     when 'latest', 'stable','stable-slim','stable-backports','jessie', 'jessie-slim','jessie-backports', /^8/
+                     when 'latest', 'stable', 'stable-slim', 'stable-backports', 'jessie', 'jessie-slim', 'jessie-backports', %r{^8}
                        'jessie'
                      when 'sid', 'sid-slim'
                        'sid'
-                     when 'wheezy', /^7/
+                     when 'wheezy', %r{^7}
                        'wheezy'
                      end
         when 'alpine'
@@ -267,13 +271,37 @@ module PuppetX
           r10k_version: @context[:r10k_version],
           codename: codename,
           puppet_version: puppet_version,
-          facter_version: facter_version,
-        }.reject { |name, value| value.nil? }
+          facter_version: facter_version
+        }.reject { |_name, value| value.nil? }
         unless @context[:env].nil?
           @context[:env].map { |pair| pair.split('=') }.each do |name, value|
             @context[:environment][name] = value
           end
         end
+      end
+
+      def determine_repository_details
+        puppet5 = @context[:puppet_agent_version].to_f >= 5 ? true : false
+        @context[:package_address], @context[:package_name] = case @context[:os]
+                                                              when 'ubuntu', 'debian'
+                                                                if puppet5
+                                                                  [
+                                                                    'https://apt.puppetlabs.com/puppet5-release-"$CODENAME".deb',
+                                                                    'puppet5-release-"$CODENAME".deb'
+                                                                  ]
+                                                                else
+                                                                  [
+                                                                    'https://apt.puppetlabs.com/puppetlabs-release-pc1-"$CODENAME".deb',
+                                                                    'puppetlabs-release-pc1-"$CODENAME".deb'
+                                                                  ]
+                                                                end
+                                                              when 'centos'
+                                                                if puppet5
+                                                                  "https://yum.puppetlabs.com/puppet5/puppet5-release-el-#{@context[:os_version]}.noarch.rpm"
+                                                                else
+                                                                  "https://yum.puppetlabs.com/puppetlabs-release-pc1-el-#{@context[:os_version]}.noarch.rpm"
+                                                                end
+                                                              end
       end
 
       def determine_hostname
@@ -295,28 +323,28 @@ module PuppetX
       end
 
       def build_args
-        [
-          'cgroup_parent',
-          'cpu_period',
-          'cpu_quota',
-          'cpu_shares',
-          'cpuset_cpus',
-          'cpuset_mems',
-          'isolation',
-          'memory_limit',
-          'memory_swap',
-          'shm_size',
-          'ulimit',
-          'disable_content_trust',
-          'force_rm',
-          'no_cache',
-          'pull',
-          'quiet',
+        %w[
+          cgroup_parent
+          cpu_period
+          cpu_quota
+          cpu_shares
+          cpuset_cpus
+          cpuset_mems
+          isolation
+          memory_limit
+          memory_swap
+          shm_size
+          ulimit
+          disable_content_trust
+          force_rm
+          no_cache
+          pull
+          quiet
         ].reject { |arg| @context[arg.to_sym].nil? }
       end
 
       def string_args
-        build_args.collect do |arg|
+        build_args.map do |arg|
           with_hyphen = arg.tr('_', '-')
           @context[arg.to_sym] == true ? "--#{with_hyphen}" : "--#{with_hyphen}=#{@context[arg.to_sym]}"
         end.join(' ')
@@ -338,12 +366,20 @@ module PuppetX
         @context[:apt_proxy].nil? ? '' : "--build-arg APT_PROXY=#{@context[:apt_proxy]}"
       end
 
-      def build_command # rubocop:disable Metrics/AbcSize
+      def command_build_args
+        "#{autosign_string} #{apt_proxy_string} #{http_proxy_string} #{https_proxy_string} #{string_args}"
+      end
+
+      def docker_network
+        @context[:network].nil? ? '' : "--network #{@context[:network]}"
+      end
+
+      def build_command
         dockerfile_path = build_file.save.path
         if @context[:rocker]
-          "rocker build #{autosign_string} #{apt_proxy_string} #{http_proxy_string} #{https_proxy_string} #{string_args} -f #{dockerfile_path} ."
+          "rocker build #{command_build_args} -f #{dockerfile_path} ."
         else
-          "docker build #{autosign_string} #{apt_proxy_string} #{http_proxy_string} #{https_proxy_string} #{string_args} -t #{@context[:image_name]} -f #{dockerfile_path} ."
+          "docker build #{command_build_args} #{docker_network} -t #{@context[:image_name]} -f #{dockerfile_path} ."
         end
       end
     end

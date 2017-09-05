@@ -53,6 +53,10 @@ PuppetX::Puppetlabs::ImageBuilder::Face.define(:docker, '0.1.0') do
       summary 'An authentication token used for autosigning master-built images'
     end
 
+    option '--network STRING' do
+      summary 'The Docker network to pass along to the docker build command'
+    end
+
     when_invoked do |*options|
       args = options.pop
       # no-cache is a boolean option, but Puppet cunningly convert anything begining with no
@@ -63,9 +67,9 @@ PuppetX::Puppetlabs::ImageBuilder::Face.define(:docker, '0.1.0') do
         builder = PuppetX::Puppetlabs::DockerBuilder.new(manifest, args)
         builder.build
       rescue PuppetX::Puppetlabs::BuildError => e
-        fail "An error occured and the build process was interupted: #{e.message}"
+        raise "An error occured and the build process was interupted: #{e.message}"
       rescue PuppetX::Puppetlabs::InvalidContextError => e
-        fail e.message
+        raise e.message
       end
     end
   end
@@ -80,7 +84,7 @@ PuppetX::Puppetlabs::ImageBuilder::Face.define(:docker, '0.1.0') do
         builder = PuppetX::Puppetlabs::DockerBuilder.new(manifest, args)
         builder.build_file.render
       rescue PuppetX::Puppetlabs::InvalidContextError => e
-        fail e.message
+        raise e.message
       end
     end
   end

@@ -30,19 +30,20 @@ acbuild --debug label add <%= name %> "<%= value %>"
   <% end %>
 <% end %>
 
+<% unless skip_puppet_install %>
 <% if os %>
 <% if os == 'ubuntu' or os == 'debian' %>
 acbuild --debug run -- apt-get update
 acbuild --debug run -- apt-get install -y lsb-release wget
-acbuild --debug run -- wget https://apt.puppetlabs.com/puppetlabs-release-pc1-"$CODENAME".deb
-acbuild --debug run -- dpkg -i puppetlabs-release-pc1-"$CODENAME".deb
+acbuild --debug run -- wget <%= packagr_address %>
+acbuild --debug run -- dpkg -i <%= package_name %>
 acbuild --debug run -- rm puppetlabs-release-pc1-"$CODENAME".deb
 acbuild --debug run -- apt-get update
 acbuild --debug run -- apt-get install --no-install-recommends -y puppet-agent="$PUPPET_AGENT_VERSION"-1"$CODENAME"
 acbuild --debug run -- apt-get clean
 acbuild --debug run -- rm -rf /var/lib/apt/lists/*
 <% elsif os == 'centos' %>
-acbuild run -- rpm -Uvh https://yum.puppetlabs.com/puppetlabs-release-pc1-el-7.noarch.rpm
+acbuild run -- rpm -Uvh <%= package_address %>
 acbuild run -- yum upgrade -y
 acbuild run -- yum update -y
 acbuild run -- yum install -y puppet-agent-"$PUPPET_AGENT_VERSION"
@@ -56,6 +57,7 @@ acbuild run -- gem install puppet:"$PUPPET_VERSION" facter:"$FACTER_VERSION"
 acbuild run -- <%= puppet_path %> module install puppetlabs-apk
 # Workaround for https://tickets.puppetlabs.com/browse/FACT-1351
 acbuild run -- rm /usr/lib/ruby/gems/2.3.0/gems/facter-"$FACTER_VERSION"/lib/facter/blockdevices.rb
+<% end %>
 <% end %>
 <% end %>
 
@@ -101,7 +103,7 @@ acbuild --debug copy <%= hiera_data %> /hieradata
 acbuild run -- apt-get update
 <% if autosign_token %>acbuild run -- printf 'custom_attributes:\n    challengePassword: "%s"\n' $AUTOSIGN_TOKEN >> /etc/puppetlabs/puppet/csr_attributes.yaml<% end %>
 <% if master_is_ip %>acbuild run -- echo <%= master_host %> puppet >> /etc/hosts<% end %>
-acbuild run -- <%= puppet_path %> agent --server <% if master_is_ip %>puppet<% else %><%= master_host %><% end %><% if master_port %> --masterport <%= master_port %><% end %> --verbose --onetime --no-daemonize --show_diff --summarize
+acbuild run -- <%= puppet_path %> agent --server <% if master_is_ip %>puppet<% else %><%= master_host %><% end %><% if master_port %> --masterport <%= master_port %><% end %> --verbose <% if puppet_debug %>--debug <% end %>--onetime --no-daemonize <% if show_diff %>--show_diff <% end %>--summarize
 <% if autosign_token %>acbuild run -- rm /etc/puppetlabs/puppet/csr_attributes.yaml<% end %>
 acbuild run -- apt-get clean
 acbuild run -- rm -rf /var/lib/apt/lists/*
@@ -109,14 +111,14 @@ acbuild run -- rm -rf /var/lib/apt/lists/*
 acbuild run -- yum update -y
 <% if autosign_token %>acbuild run -- printf 'custom_attributes:\n    challengePassword: "%s"\n' $AUTOSIGN_TOKEN >> /etc/puppetlabs/puppet/csr_attributes.yaml<% end %>
 <% if master_is_ip %>acbuild run -- echo <%= master_host %> puppet >> /etc/hosts<% end %>
-acbuild run -- <%= puppet_path %> agent --server <% if master_is_ip %>puppet<% else %><%= master_host %><% end %><% if master_port %> --masterport <%= master_port %><% end %> --verbose --onetime --no-daemonize --show_diff --summarize
+acbuild run -- <%= puppet_path %> agent --server <% if master_is_ip %>puppet<% else %><%= master_host %><% end %><% if master_port %> --masterport <%= master_port %><% end %> --verbose <% if puppet_debug %>--debug <% end %>--onetime --no-daemonize <% if show_diff %>--show_diff <% end %>--summarize
 <% if autosign_token %>acbuild run -- rm /etc/puppetlabs/puppet/csr_attributes.yaml<% end %>
 acbuild run -- yum clean all
     <% elsif os == 'alpine' %>
 acbuild run -- apk update && \
 <% if autosign_token %>acbuild run -- printf 'custom_attributes:\n    challengePassword: "%s"\n' $AUTOSIGN_TOKEN >> /etc/puppetlabs/puppet/csr_attributes.yaml<% end %>
 <% if master_is_ip %>acbuild run -- echo <%= master_host %> puppet >> /etc/hosts<% end %>
-acbuild run -- <%= puppet_path %> agent --server <% if master_is_ip %>puppet<% else %><%= master_host %><% end %><% if master_port %> --masterport <%= master_port %><% end %> --verbose --onetime --no-daemonize --show_diff --summarize
+acbuild run -- <%= puppet_path %> agent --server <% if master_is_ip %>puppet<% else %><%= master_host %><% end %><% if master_port %> --masterport <%= master_port %><% end %> --verbose <% if puppet_debug %>--debug <% end %>--onetime --no-daemonize <% if show_diff %>--show_diff <% end %>--summarize
 <% if autosign_token %>acbuild run -- rm /etc/puppetlabs/puppet/csr_attributes.yaml<% end %>
 acbuild run -- rm -rf /var/cache/apk/*
     <% end %>
@@ -124,18 +126,18 @@ acbuild run -- rm -rf /var/cache/apk/*
     <% if os == 'ubuntu' or os == 'debian' %>
 acbuild run -- apt-get update
 <% if use_puppetfile %>acbuild run -- <%= r10k_path %> puppetfile install --moduledir /etc/puppetlabs/code/modules<% end %>
-acbuild run -- <%= puppet_path %> apply <%= manifest %> --verbose --show_diff --summarize <% if use_hiera %>--hiera_config=/hiera.yaml<% end %> --app_management
+acbuild run -- <%= puppet_path %> apply <%= manifest %> --verbose <% if puppet_debug %>--debug <% end %><% if show_diff %>--show_diff <% end %>--summarize <% if use_hiera %>--hiera_config=/hiera.yaml<% end %> --app_management
 acbuild run -- apt-get clean
 acbuild run -- rm -rf /var/lib/apt/lists/*
     <% elsif os == 'centos' %>
 acbuild run -- yum update -y
 <% if use_puppetfile %>acbuild run -- <%= r10k_path %> puppetfile install --moduledir /etc/puppetlabs/code/modules<% end %>
-acbuild run -- <%= puppet_path %> apply <%= manifest %> --verbose --show_diff --summarize <% if use_hiera %>--hiera_config=/hiera.yaml<% end %> --app_management
+acbuild run -- <%= puppet_path %> apply <%= manifest %> --verbose <% if puppet_debug %>--debug <% end %><% if show_diff %>--show_diff <% end %>--summarize <% if use_hiera %>--hiera_config=/hiera.yaml<% end %> --app_management
 acbuild run -- yum clean all
     <% elsif os == 'alpine' %>
 acbuild run -- apk update
 <% if use_puppetfile %>acbuild run -- <%= r10k_path %> puppetfile install --moduledir /etc/puppetlabs/code/modules<% end %>
-acbuild run -- <%= puppet_path %> apply <%= manifest %> --verbose --show_diff --summarize <% if use_hiera %>--hiera_config=/hiera.yaml<% end %> --app_management
+acbuild run -- <%= puppet_path %> apply <%= manifest %> --verbose <% if puppet_debug %>--debug <% end %><% if show_diff %>--show_diff <% end %>--summarize <% if use_hiera %>--hiera_config=/hiera.yaml<% end %> --app_management
 acbuild run -- rm -rf /var/cache/apk/*
     <% end %>
   <% end %>
